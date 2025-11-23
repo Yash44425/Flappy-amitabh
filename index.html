@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Flappy Amitabh 🔥</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: red;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+// BASE GAME SIZE
+const BASE_WIDTH = 400;
+const BASE_HEIGHT = 600;
+
+// Resize fullscreen
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
+
+// Scaling functions
+function scaleX(x) { return x * (canvas.width / BASE_WIDTH); }
+function scaleY(y) { return y * (canvas.height / BASE_HEIGHT); }
+
+// ------------------ IMAGES ------------------
+const birdImg = new Image(); birdImg.src = "amitabh.png";
+const fireImg = new Image(); fireImg.src = "fire.png";
+const bgImg   = new Image(); bgImg.src = "firebg.png";
+
+// ------------------ SOUNDS ------------------
+const hitSound = new Audio("hit.mp3");
+const bgMusic  = new Audio("bgmusic.mp3");
+bgMusic.loop = true;
+bgMusic.volume = 0.6;
+
+let audioStarted = false;
+function enableAudio() {
+  if (!audioStarted) {
+    audioStarted = true;
+    try { bgMusic.currentTime = 0; bgMusic.play(); } catch(e){}
+  }
+}
+
+// ------------------ GAME STATE ------------------
+let state = "start";
+let frames = 0;
+let score = 0;
+let best = parseInt(localStorage.getItem("flappy_best")) || 0;
+let bgX = 0;
+
+// ------------------ BIRD ------------------
+const bird = {
+  x: 70, y: 150,
+  width: 50, height: 50,
+  vel: 0, gravity: 0.35, lift: -7.5,
+
+  reset() {
+    this.x = 70;
+    this.y = 150;
+    this.vel = 0;
+  },
+
+  update() {
+    this.vel += this.gravity;
+    this.y += this.vel;
+    if (this.y + this.height > BASE_HEIGHT) doGameOver();
+  },
+
+  draw() {
+    ctx.drawImage(birdImg, scaleX(this.x), scaleY(this.y),
+                  scaleX(this.width), scaleY(this.height));
+  }
+};
+
+// ------------------ PIPES ------------------
+const pipes = [];
+function spawnPipe() {
+  let topHeight = Math.floor(Math.random() * 250) + 50;
+  let gap = 150;
+
+  pipes.push({ x: BASE_WIDTH, y: 0, width: 60, height: topHeight, passed: false });
+  pipes.push({ x: BASE_WIDTH, y: topHeight + gap, width: 60, height: BASE_HEIGHT - topHeight - gap });
+}
+
+// ------------------ GAME OVER ------------------
+function doGameOver() {
+  if (state !== "over") {
+    state = "over";
+    try { hitSound.play(); } catch(e){}
+    try { bgMusic.pause(); } catch(e){}
+    if (score > best) { best = score; localStorage.setItem("flappy_best", best); }
+  }
+}
+
+// ------------------ RESTART ------------------
+function restart() {
+  state = "start";
+  frames = 0;
+  score = 0;
+  pipes.length = 0;
+  bird.reset();
+  bgX = 0;
+  try { bgMusic.currentTime = 0; bgMusic.play(); } catch(e){}
+}
+
+// ------------------ INPUT ------------------
+function jumpOrStart(event) {
+  if (event) event.preventDefault();
+  enableAudio();
+
+  if (state === "start") {
+    state = "playing";
+    bird.vel = bird.lift;
+  } else if (state === "playing") {
+    bird.vel = bird.lift;
+  } else if (state === "over") {
+    restart();
+  }
+}
+
+document.addEventListener("keydown", e => {
+  if (e.code === "Space") jumpOrStart(e);
+  if (e.code === "KeyR") restart();
+});
+
+// mobile tap
+canvas.addEventListener("touchstart", jumpOrStart, { passive: false });
+
+// desktop click
+canvas.addEventListener("click", jumpOrStart);
+
+// ------------------ MAIN LOOP ------------------
+function loop() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Background scroll
+  bgX -= 2;
+  if (bgX <= -BASE_WIDTH) bgX = 0;
+  ctx.drawImage(bgImg, scaleX(bgX), 0, canvas.width, canvas.height);
+  ctx.drawImage(bgImg, scaleX(bgX + BASE_WIDTH), 0, canvas.width, canvas.height);
+
+  if (state !== "start") bird.update();
+  bird.draw();
+
+  if (state === "playing" && frames % 100 === 0) spawnPipe();
+
+  // Pipe update
+  for (let pipe of pipes) {
+    if (state === "playing") pipe.x -= 3;
+
+    ctx.drawImage(fireImg, scaleX(pipe.x), scaleY(pipe.y),
+                  scaleX(pipe.width), scaleY(pipe.height));
+
+    // collision
+    if (bird.x < pipe.x + pipe.width &&
+        bird.x + bird.width > pipe.x &&
+        bird.y < pipe.y + pipe.height &&
+        bird.y + bird.height > pipe.y) doGameOver();
+
+    // score
+    if (!pipe.passed && pipe.x + pipe.width < bird.x) {
+      score++; pipe.passed = true;
+    }
+  }
+
+  // TEXT
+  ctx.fillStyle = "white";
+  ctx.font = scaleX(30) + "px Arial";
+
+  if (state === "start") {
+    ctx.fillText("Tap to Start", scaleX(100), scaleY(300));
+  } else if (state === "playing") {
+    ctx.fillText("Score: " + score, scaleX(20), scaleY(40));
+  } else if (state === "over") {
+    ctx.fillText("GAME OVER", scaleX(110), scaleY(250));
+    ctx.fillText("Score: " + score, scaleX(120), scaleY(300));
+    ctx.fillText("Best: " + best, scaleX(120), scaleY(340));
+    ctx.fillText("Tap to Restart", scaleX(90), scaleY(390));
+  }
+
+  frames++;
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
